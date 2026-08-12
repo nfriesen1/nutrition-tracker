@@ -75,8 +75,18 @@ Email and password, a submit button, and a link to signup.
 Same shape, plus password confirmation.
 
 - **Calls:** `supabase.auth.signUp`.
-- **Validation:** password minimum 8 characters, matching confirmation. Eight is Supabase's
-  default minimum; if T-01 raises it in the dashboard, this number moves too.
+- **Validation:** password minimum 8 characters, matching confirmation. **Supabase's default
+  minimum is 6, not 8** — verified against the live project in T-04 — so the form is stricter
+  than the server. That direction is safe: everything the form accepts, the server accepts.
+  The number lives in `PASSWORD_MIN_LENGTH` in `src/auth/schemas.ts`; raise the dashboard's
+  "Minimum password length" to 8 to make them agree, or drop the constant to 6.
+
+  The broken direction is the other one. A client looser than the server accepts a password,
+  sends it, and gets back a server error the user cannot act on from the form.
+
+  Login deliberately has **no** minimum — only non-empty. Login validates against what the
+  account already has, and imposing the signup rule would lock out anyone whose password
+  predates it.
 - **Success:** email confirmation is off (T-01), so signup returns a live session and the flow
   is identical to login — the gate does the navigating.
 - **Error:** "User already registered" is passed through. This *is* an account-existence oracle,
