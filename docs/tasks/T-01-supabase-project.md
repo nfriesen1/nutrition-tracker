@@ -23,8 +23,34 @@ rest of the build needs is recorded somewhere safe.
    - JWKS URL, or the JWT secret if the project is on the legacy mode
 6. Confirm the JWKS endpoint is reachable and returns keys:
    `curl https://<ref>.supabase.co/auth/v1/.well-known/jwks.json`
-7. Create `app/.env.local` with the three `EXPO_PUBLIC_*` values from
-   [06-deployment.md](../06-deployment.md). Confirm `.gitignore` already covers it.
+7. Copy the templates and fill them in:
+   ```sh
+   cp app/.env.example app/.env.local
+   cp api/.env.example api/.env.local
+   ```
+   Both are gitignored; the `.example` files are committed and must stay empty of real
+   values. `api/.env.local` is not read by anything until [T-05](T-05-go-service-scaffold.md),
+   but filling it in now means the credentials are recorded in one pass.
+8. Write the answers into **Record** below — [T-08](T-08-jwt-middleware.md) reads them.
+9. Verify: `./scripts/verify-t01.sh`
+
+## Record
+
+Fill this in as part of the task. These answers are inputs to later tasks, and an
+undocumented decision is one that gets re-litigated in three weeks.
+
+| | |
+|---|---|
+| Project ref | `<ref>` — the subdomain in `https://<ref>.supabase.co` |
+| Region | *(matched by `primary_region` in [T-16](T-16-first-deploy.md)'s `fly.toml`)* |
+| **JWT signing mode** | **asymmetric (JWKS)** / **legacy shared secret** — *delete one* |
+| Password minimum length | *(the zod schema in [T-04](T-04-auth-screens.md) must match)* |
+| Email confirmation | disabled |
+| Date completed | |
+
+If the signing mode came back as legacy shared secret and the dashboard offered a migration
+to asymmetric keys, note whether it was taken. [T-08](T-08-jwt-middleware.md) is different code
+either way and implements exactly one of them.
 
 ## Done when
 
@@ -33,7 +59,9 @@ rest of the build needs is recorded somewhere safe.
 - [ ] The JWKS URL returns a key set, **or** the project is confirmed as legacy-shared-secret and
       that fact is written down.
 - [ ] `psql "<pooler connection string>" -c 'select 1'` succeeds.
-- [ ] `app/.env.local` exists and `git status` does not list it.
+- [ ] `app/.env.local` and `api/.env.local` exist and `git status` lists neither.
+- [ ] **Record** above is filled in.
+- [ ] `./scripts/verify-t01.sh` passes every check.
 
 ## Notes
 

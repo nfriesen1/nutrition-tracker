@@ -1,0 +1,16 @@
+# Normalise line endings. Without this, files checked out on Windows get CRLF, and a
+# shell script with CRLF endings fails with a confusing `bad interpreter` error when it
+# runs anywhere else — including the Docker build in T-16.
+* text=auto eol=lf
+
+# Never touched by line-ending conversion.
+*.png binary
+*.jpg binary
+*.ico binary
+*.ttf binary
+*.woff  binary
+*.woff2 binary
+
+# sqlc output — machine-written, never hand-edited (docs/01-architecture.md).
+# Marked generated so it collapses by default in pull request diffs.
+api/internal/store/generated/** linguist-generated=true
