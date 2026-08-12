@@ -21,6 +21,19 @@ ok()   { printf '  \033[32mPASS\033[0m  %s\n' "$1"; pass=$((pass + 1)); }
 bad()  { printf '  \033[31mFAIL\033[0m  %s\n' "$1"; fail=$((fail + 1)); }
 note() { printf '  \033[33mSKIP\033[0m  %s\n' "$1"; skip=$((skip + 1)); }
 
+# True when a value is still template text rather than a real one.
+#
+# Covers both conventions in play: this repo's .env.example files use <angle>
+# brackets, and Supabase's dashboard hands out connection strings containing a
+# literal [YOUR-PASSWORD]. Missing the second is how an unsubstituted password
+# reaches a deploy and fails as an authentication error rather than a config one.
+is_placeholder() {
+  case "$1" in
+    ""|*"<"*|*"["*"]"*|*YOUR-PASSWORD*|*your-password*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 echo
 echo "T-01 — Supabase project setup"
 echo "─────────────────────────────────────────────────────────────"
@@ -53,7 +66,7 @@ echo "Required variables (values not printed)"
 
 for var in EXPO_PUBLIC_SUPABASE_URL EXPO_PUBLIC_SUPABASE_ANON_KEY DATABASE_URL; do
   val="${!var:-}"
-  if [ -n "$val" ] && [[ "$val" != *"<"* ]]; then ok "$var is set"; else bad "$var is empty or still a placeholder"; fi
+  if ! is_placeholder "$val"; then ok "$var is set"; else bad "$var is empty or still a placeholder"; fi
 done
 
 # The service role key must never reach the client bundle. Every EXPO_PUBLIC_* value
@@ -70,10 +83,10 @@ echo "JWT signing mode (docs/04-auth.md)"
 
 if [ -n "${SUPABASE_JWT_SECRET:-}" ]; then
   note "SUPABASE_JWT_SECRET is set — legacy shared-secret mode. T-08 implements the HS256 path."
-  if [ -n "${SUPABASE_JWKS_URL:-}" ] && [[ "${SUPABASE_JWKS_URL}" != *"<"* ]]; then
+  if ! is_placeholder "${SUPABASE_JWKS_URL:-}"; then
     bad "both SUPABASE_JWT_SECRET and SUPABASE_JWKS_URL are set — pick ONE path"
   fi
-elif [ -n "${SUPABASE_JWKS_URL:-}" ] && [[ "${SUPABASE_JWKS_URL}" != *"<"* ]]; then
+elif ! is_placeholder "${SUPABASE_JWKS_URL:-}"; then
   body=$(curl -fsS --max-time 10 "$SUPABASE_JWKS_URL" 2>/dev/null)
   if [ -z "$body" ]; then
     bad "JWKS endpoint unreachable: $SUPABASE_JWKS_URL"
@@ -90,35 +103,55 @@ fi
 
 for var in SUPABASE_JWT_ISS SUPABASE_JWT_AUD; do
   val="${!var:-}"
-  if [ -n "$val" ] && [[ "$val" != *"<"* ]]; then ok "$var is set"; else bad "$var is empty or still a placeholder"; fi
+  if ! is_placeholder "$val"; then ok "$var is set"; else bad "$var is empty or still a placeholder"; fi
 done
 
 # ── database ─────────────────────────────────────────────────────────────────
 echo
 echo "Database"
 
-if [ -z "${DATABASE_URL:-}" ] || [[ "${DATABASE_URL}" == *"<"* ]]; then
-  note "DATABASE_URL not set — skipping connection check"
-elif ! command -v psql >/dev/null 2>&1; then
-  note "psql not installed — skipping connection check"
-elif psql "$DATABASE_URL" -c 'select 1' >/dev/null 2>&1; then
-  ok "database reachable"
-  # docs/06-deployment.md: the pooler on 6543, not the direct connection on 5432.
-  # A pgx pool against the direct port will exhaust Supabase's connection cap.
+if is_placeholder "${DATABASE_URL:-}"; then
+  bad "DATABASE_URL is empty or still contains a placeholder password"
+else
+  # Shape first, and unconditionally — this is the check that catches the most common
+  # mistake, and it needs no Postgres client. docs/06-deployment.md: the pooler on
+  # 6543, not the direct connection on 5432. A pgx pool against the direct port will
+  # exhaust Supabase's connection cap once Fly runs more than one machine.
   case "$DATABASE_URL" in
-    *:6543/*) ok "using the connection pooler (port 6543)" ;;
-    *:5432/*) bad "using the DIRECT connection (port 5432) — switch to the pooler on 6543" ;;
+    *:6543/*) ok "using the transaction pooler (port 6543)" ;;
+    *:5432/*) bad "using port 5432 — that is the DIRECT connection (or the session pooler). Switch to the transaction pooler on 6543." ;;
     *)        note "could not determine the port from DATABASE_URL" ;;
   esac
-else
-  bad "cannot connect with DATABASE_URL"
+
+  case "$DATABASE_URL" in
+    *@*.pooler.supabase.com:*) ok "host is the Supabase pooler" ;;
+    *@db.*.supabase.co:*)      bad "host is db.<ref>.supabase.co — that is the direct connection, not the pooler" ;;
+    *)                         note "unrecognised database host" ;;
+  esac
+
+  # postgres.<ref> rather than bare postgres is what the pooler expects.
+  case "$DATABASE_URL" in
+    postgresql://postgres.*) ok "user is postgres.<ref>, as the pooler requires" ;;
+    postgresql://postgres:*) bad "user is bare 'postgres' — the pooler needs postgres.<project-ref>" ;;
+    *)                       note "could not determine the user from DATABASE_URL" ;;
+  esac
+
+  if command -v psql >/dev/null 2>&1; then
+    if psql "$DATABASE_URL" -c 'select 1' >/dev/null 2>&1; then
+      ok "database reachable and credentials accepted"
+    else
+      bad "cannot connect with DATABASE_URL"
+    fi
+  else
+    note "psql not installed — cannot test the password. Shape checks above still ran; the real connection is proven in T-06."
+  fi
 fi
 
 # ── auth config ──────────────────────────────────────────────────────────────
 echo
 echo "Auth configuration"
 
-if [ -n "${EXPO_PUBLIC_SUPABASE_URL:-}" ] && [[ "${EXPO_PUBLIC_SUPABASE_URL}" != *"<"* ]]; then
+if ! is_placeholder "${EXPO_PUBLIC_SUPABASE_URL:-}"; then
   settings=$(curl -fsS --max-time 10 "${EXPO_PUBLIC_SUPABASE_URL}/auth/v1/settings" \
     -H "apikey: ${EXPO_PUBLIC_SUPABASE_ANON_KEY:-}" 2>/dev/null)
   if [ -z "$settings" ]; then

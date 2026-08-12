@@ -19,7 +19,8 @@ rest of the build needs is recorded somewhere safe.
 5. Collect and store, in a password manager and not in this repository:
    - Project URL — `https://<ref>.supabase.co`
    - Anon / publishable key
-   - Database connection string, **pooler variant, port 6543**
+   - Database connection string, **transaction pooler, port 6543** — from the **Connect**
+     button in the dashboard's top bar, *not* Project Settings
    - JWKS URL, or the JWT secret if the project is on the legacy mode
 6. Confirm the JWKS endpoint is reachable and returns keys:
    `curl https://<ref>.supabase.co/auth/v1/.well-known/jwks.json`
@@ -42,7 +43,7 @@ undocumented decision is one that gets re-litigated in three weeks.
 | | |
 |---|---|
 | Project ref | in `app/.env.local` / `api/.env.local` — not committed |
-| Region | **TODO** — *(matched by `primary_region` in [T-16](T-16-first-deploy.md)'s `fly.toml`)* |
+| Region | **`us-west-2`** (Oregon) — [T-16](T-16-first-deploy.md) sets Fly's `primary_region` to **`sea`**, the nearest Fly region |
 | **JWT signing mode** | **asymmetric (JWKS)** — verified 2026-08-12 |
 | Signing algorithm | `ES256`, one key in the set |
 | Password minimum length | **TODO** — *(the zod schema in [T-04](T-04-auth-screens.md) must match)* |
@@ -58,14 +59,23 @@ fallback — `SUPABASE_JWT_SECRET` stays unset.
 
 ### Outstanding
 
-`api/.env.local` exists with the JWKS URL, issuer, and audience derived from the project URL,
-but **`DATABASE_URL` is still blank** — it needs the database password, which is only visible in
-the dashboard. This does not block [T-03](T-03-supabase-client-session.md) or
+`api/.env.local` holds the full transaction-pooler `DATABASE_URL`, verified by shape and by
+reachability — the host resolves to an AWS load balancer in `us-west-2` and accepts TCP on
+6543. **The password is still the literal `[YOUR-PASSWORD]` placeholder**; substitute it from
+the dashboard.
+
+Nothing here blocks [T-03](T-03-supabase-client-session.md) or
 [T-04](T-04-auth-screens.md), which talk to Supabase directly and never to the Go service. It
 does block [T-06](T-06-schema-migrations.md) onward.
 
-Get it from Project Settings → Database → Connection string → **Transaction pooler** (port
-6543, not 5432), and paste it into `api/.env.local`.
+The password cannot be verified locally: neither `psql` nor Go is installed on this machine, so
+`verify-t01.sh` checks the connection string's shape and skips the credential test. The first
+real proof is [T-06](T-06-schema-migrations.md), when the Go service runs its migrations.
+`winget install --id PostgreSQL.psql -e` closes that gap early if it is worth it.
+
+> **The connection string is no longer under Project Settings → Database.** Supabase moved it to
+> the **Connect** button in the dashboard's top bar. Steps 5 and 6 above are stale; the region
+> also shows under Project Settings → Infrastructure.
 
 ## Done when
 
@@ -73,10 +83,12 @@ Get it from Project Settings → Database → Connection string → **Transactio
       confirmation step. *(email provider enabled, `mailer_autoconfirm` on)*
 - [x] The JWKS URL returns a key set, **or** the project is confirmed as legacy-shared-secret and
       that fact is written down. *(one `ES256` key — asymmetric)*
-- [ ] `psql "<pooler connection string>" -c 'select 1'` succeeds. **← `DATABASE_URL` not set yet**
+- [ ] `psql "<pooler connection string>" -c 'select 1'` succeeds. **← password is still the
+      `[YOUR-PASSWORD]` placeholder, and `psql` is not installed here; first real proof is T-06**
 - [x] `app/.env.local` and `api/.env.local` exist and `git status` lists neither.
-- [ ] **Record** above is filled in. **← region and password minimum still TODO**
-- [ ] `./scripts/verify-t01.sh` passes every check. **← 7 pass, 5 fail, all on the API side**
+- [ ] **Record** above is filled in. **← password minimum still TODO**
+- [ ] `./scripts/verify-t01.sh` passes every check. **← 12 pass, 2 fail; both are the
+      unsubstituted password**
 
 ## Notes
 

@@ -173,7 +173,7 @@ ENTRYPOINT ["/api"]
 
 ```toml
 app = "nutrition-tracker-api"
-primary_region = "iad"   # match the Supabase project's region
+primary_region = "sea"   # nearest Fly region to Supabase's us-west-2 (see T-01's Record)
 
 [build]
 
@@ -197,6 +197,10 @@ primary_region = "iad"   # match the Supabase project's region
 `primary_region` should match the Supabase project's region. Every request does at least one
 database round trip, and putting the API on a different continent from the database adds that
 latency to every call for no benefit.
+
+The project is in `us-west-2` (Oregon), recorded in [T-01](tasks/T-01-supabase-project.md).
+Fly has no Oregon region, so `sea` (Seattle) is the nearest — a few hundred kilometres, which is
+single-digit milliseconds. `sjc` is the fallback if `sea` has capacity trouble.
 
 `min_machines_running = 1` and `auto_stop_machines = false` keep a machine warm. A scale-to-zero
 cold start is several seconds on a request the user is waiting for, and this is the single
