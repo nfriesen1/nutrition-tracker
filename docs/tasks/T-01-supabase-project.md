@@ -41,27 +41,42 @@ undocumented decision is one that gets re-litigated in three weeks.
 
 | | |
 |---|---|
-| Project ref | `<ref>` — the subdomain in `https://<ref>.supabase.co` |
-| Region | *(matched by `primary_region` in [T-16](T-16-first-deploy.md)'s `fly.toml`)* |
-| **JWT signing mode** | **asymmetric (JWKS)** / **legacy shared secret** — *delete one* |
-| Password minimum length | *(the zod schema in [T-04](T-04-auth-screens.md) must match)* |
-| Email confirmation | disabled |
-| Date completed | |
+| Project ref | in `app/.env.local` / `api/.env.local` — not committed |
+| Region | **TODO** — *(matched by `primary_region` in [T-16](T-16-first-deploy.md)'s `fly.toml`)* |
+| **JWT signing mode** | **asymmetric (JWKS)** — verified 2026-08-12 |
+| Signing algorithm | `ES256`, one key in the set |
+| Password minimum length | **TODO** — *(the zod schema in [T-04](T-04-auth-screens.md) must match)* |
+| Email provider | enabled — verified via `/auth/v1/settings` |
+| Email confirmation | disabled (`mailer_autoconfirm` on) — verified |
+| Date completed | 2026-08-12 (app side); API side outstanding, see below |
 
-If the signing mode came back as legacy shared secret and the dashboard offered a migration
-to asymmetric keys, note whether it was taken. [T-08](T-08-jwt-middleware.md) is different code
-either way and implements exactly one of them.
+The signing mode is the load-bearing answer here. It came back **asymmetric**, which is the
+path [01-architecture.md](../01-architecture.md) assumes and the one
+[04-auth.md](../04-auth.md) prefers: the Go service then holds no secret at all, only public key
+material. [T-08](T-08-jwt-middleware.md) implements the JWKS path and **not** the HS256
+fallback — `SUPABASE_JWT_SECRET` stays unset.
+
+### Outstanding
+
+`api/.env.local` exists with the JWKS URL, issuer, and audience derived from the project URL,
+but **`DATABASE_URL` is still blank** — it needs the database password, which is only visible in
+the dashboard. This does not block [T-03](T-03-supabase-client-session.md) or
+[T-04](T-04-auth-screens.md), which talk to Supabase directly and never to the Go service. It
+does block [T-06](T-06-schema-migrations.md) onward.
+
+Get it from Project Settings → Database → Connection string → **Transaction pooler** (port
+6543, not 5432), and paste it into `api/.env.local`.
 
 ## Done when
 
-- [ ] Signing up through the Supabase dashboard's auth UI creates a user with no email
-      confirmation step.
-- [ ] The JWKS URL returns a key set, **or** the project is confirmed as legacy-shared-secret and
-      that fact is written down.
-- [ ] `psql "<pooler connection string>" -c 'select 1'` succeeds.
-- [ ] `app/.env.local` and `api/.env.local` exist and `git status` lists neither.
-- [ ] **Record** above is filled in.
-- [ ] `./scripts/verify-t01.sh` passes every check.
+- [x] Signing up through the Supabase dashboard's auth UI creates a user with no email
+      confirmation step. *(email provider enabled, `mailer_autoconfirm` on)*
+- [x] The JWKS URL returns a key set, **or** the project is confirmed as legacy-shared-secret and
+      that fact is written down. *(one `ES256` key — asymmetric)*
+- [ ] `psql "<pooler connection string>" -c 'select 1'` succeeds. **← `DATABASE_URL` not set yet**
+- [x] `app/.env.local` and `api/.env.local` exist and `git status` lists neither.
+- [ ] **Record** above is filled in. **← region and password minimum still TODO**
+- [ ] `./scripts/verify-t01.sh` passes every check. **← 7 pass, 5 fail, all on the API side**
 
 ## Notes
 
