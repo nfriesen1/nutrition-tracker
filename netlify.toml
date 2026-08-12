@@ -1,0 +1,30 @@
+# Netlify build + routing configuration.
+#
+# Netlify serves ONLY the static web export of the Expo app. The Go API lives on Fly.io and
+# is reached through the /api/* proxy below, which makes API calls same-origin from the
+# browser's point of view — no CORS preflights, no third-party cookie concerns.
+#
+# Fully specified in docs/06-deployment.md. Applied in T-16.
+
+[build]
+  base    = "app"
+  command = "npx expo export --platform web"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "24"
+
+# Proxy the API. API_ORIGIN is not interpolated by Netlify — replace the host below with the
+# real Fly hostname in T-16, or move this rule into a _redirects file generated at build time.
+[[redirects]]
+  from   = "/api/*"
+  to     = "https://nutrition-tracker-api.fly.dev/api/:splat"
+  status = 200
+  force  = true
+
+# SPA fallback. Must come LAST: Netlify applies the first matching rule, so a catch-all
+# placed above the API proxy would swallow every API call.
+[[redirects]]
+  from   = "/*"
+  to     = "/index.html"
+  status = 200
