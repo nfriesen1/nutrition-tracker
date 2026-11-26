@@ -9,10 +9,13 @@ Supabase Auth. The web build is hosted on Netlify; the API runs on Fly.io.
 
 ## Status
 
-**Specification complete, implementation not started.** No application code has been written
-yet. Everything in `docs/` describes what is going to be built, and
-[docs/tasks/README.md](docs/tasks/README.md) is the ordered work queue — 21 tasks, starting with
-[T-01](docs/tasks/T-01-supabase-project.md).
+**In progress: 2 of 21 tasks done.** The project is built spec-first: everything in `docs/`
+describes what is going to be built, and [docs/tasks/README.md](docs/tasks/README.md) is the
+ordered work queue.
+
+- [x] [T-01](docs/tasks/T-01-supabase-project.md) Supabase project setup (checked by `scripts/verify-t01.sh`)
+- [x] [T-02](docs/tasks/T-02-expo-scaffold.md) Expo app scaffold: every route exists and renders a placeholder screen
+- [ ] **Next:** [T-03](docs/tasks/T-03-supabase-client-session.md) Supabase client, session provider, route gate
 
 ## Where to start
 
@@ -31,18 +34,20 @@ yet. Everything in `docs/` describes what is going to be built, and
 ## Layout
 
 ```
-app/    Expo app (React Native + TypeScript)   — scaffolded in T-02
-api/    Go HTTP service                        — scaffolded in T-05
+app/    Expo app (React Native + TypeScript)   — scaffolded (T-02); screens are placeholders
+api/    Go HTTP service                        — not started (T-05)
 docs/   Specifications and the task queue
 ```
 
-The two build independently — `app/` has a `package.json`, `api/` has a `go.mod` — and agree on
+The two build independently — `app/` has a `package.json`, `api/` will have a `go.mod` — and agree on
 the contract in [docs/03-api-contract.md](docs/03-api-contract.md).
 
-## Running it (once T-01 through T-05 are done)
+## Running it
+
+The app scaffold runs today; the API runs once T-05 lands.
 
 ```sh
-# API
+# API (after T-05)
 cd api && go run ./cmd/api
 
 # App — web
