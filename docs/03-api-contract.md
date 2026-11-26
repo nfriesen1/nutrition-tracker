@@ -59,6 +59,7 @@ Every non-2xx response has exactly this shape, produced by `httpx/respond.go`:
 | `400` | `bad_request` | Malformed JSON, wrong content type, unparseable query parameter |
 | `401` | `unauthenticated` | Missing, malformed, expired, or unverifiable token |
 | `404` | `not_found` | No such resource — **or it exists and is not yours** |
+| `405` | `method_not_allowed` | Known path, unregistered method. Produced by the mux, rewritten into the envelope |
 | `409` | `conflict` | Duplicate custom food (unique index violation) |
 | `422` | `validation_failed` | Well-formed JSON that breaks a rule |
 | `500` | `internal_error` | Anything unexpected. `message` is generic; the detail is logged with the request id, not returned |
@@ -427,6 +428,13 @@ Every route is registered in `internal/httpx/router.go` — one table, one place
 [01-architecture.md](01-architecture.md). Go 1.22's method-aware patterns mean
 `mux.HandleFunc("PATCH /api/v1/diary/entries/{id}", ...)` is the whole registration, and a
 request to a known path with an unregistered method gets `405` from the mux itself.
+
+That last part has a trap worth knowing, because the obvious implementation destroys it.
+Registering a catch-all `mux.HandleFunc("/", …)` to produce a JSON `404` **also matches
+`POST /healthz`**, so the mux never gets to answer `405` and a wrong-method request comes back
+as "no such endpoint" — hiding the fact that the path exists. The service therefore registers no
+catch-all; a middleware rewrites the mux's own plain-text `404` and `405` into the envelope
+instead, preserving the `Allow` header net/http sets.
 
 ## Versioning
 
